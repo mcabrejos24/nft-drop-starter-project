@@ -1,0 +1,19 @@
+{
+    "name": "asta_powered_up",
+    "symbol": "",
+    "image": "0.png",
+    "properties": {
+      "files": [
+        {
+          "uri": "0.png",
+          "type": "image/png"
+        }
+      ],
+      "creators": [
+        {
+          "address": "8Hj9iezm64WAQiPR2b1mnQ3om7tHGThsEdzoi59aSTdP",
+          "share": 100
+        }
+      ]
+    }
+  }
