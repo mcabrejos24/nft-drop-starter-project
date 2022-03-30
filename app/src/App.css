@@ -7,6 +7,8 @@
 }
 
 .container {
+  background: url("./assets/asta_background.png");
+  background-size: cover;
   height: 100%;
   display: flex;
   flex-direction: column;
