@@ -8,7 +8,7 @@
 
 .container {
   background: url("./assets/asta_background.png");
-  background-size: cover;
+  background-size: contain;
   height: 100%;
   display: flex;
   flex-direction: column;
@@ -38,6 +38,7 @@
 
 .sub-text {
   font-size: 25px;
+  font-weight: 700;
 }
 
 .gradient-text {
