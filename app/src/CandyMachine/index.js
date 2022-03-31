@@ -30,7 +30,9 @@ const MAX_CREATOR_LIMIT = 5;
 const MAX_DATA_SIZE = 4 + MAX_NAME_LENGTH + 4 + MAX_SYMBOL_LENGTH + 4 + MAX_URI_LENGTH + 2 + 1 + 4 + MAX_CREATOR_LIMIT * MAX_CREATOR_LEN;
 const MAX_METADATA_LEN = 1 + 32 + 32 + MAX_DATA_SIZE + 1 + 1 + 9 + 172;
 const CREATOR_ARRAY_START = 1 + 32 + 32 + 4 + MAX_NAME_LENGTH + 4 + MAX_URI_LENGTH + 4 + MAX_SYMBOL_LENGTH + 2 + 1 + 4;
+
 const STORAGE_TYPE = 'ipfs' //'arweave' or 'ipfs' <-- when using arweave or ipfs
+const candyMachineID = process.env.REACT_APP_CANDY_MACHINE_ID;
 
 const getMintAddresses = async (firstCreatorAddress) => {
   const connection = new web3.Connection(
@@ -57,11 +59,10 @@ const getMintAddresses = async (firstCreatorAddress) => {
       },
   );
   const mintHashes = [];
-  const hash = process.env.REACT_APP_CANDY_MACHINE_ID;
   for (let index = 0; index < metadataAccounts.length; index++) {
     const account = metadataAccounts[index];
     const accountInfo = await connection.getParsedAccountInfo(account.pubkey);
-    const metadata = new Metadata(hash.toString(), accountInfo.value);
+    const metadata = new Metadata(candyMachineID.toString(), accountInfo.value);
     mintHashes.push(metadata.data);
   }
   return mintHashes;
@@ -72,15 +73,16 @@ const CandyMachine = ({ walletAddress }) => {
 
   // Add state property inside your component like this
   const [candyMachine, setCandyMachine] = useState(null);
+  const [mintCount, setMintCount] = useState(0);
   const [mints, setMints] = useState([]);
 
   const [isMinting, setIsMinting] = useState(false);
   const [isLoadingMints, setIsLoadingMints] = useState(false);
 
   const getCandyMachineCreator = async (candyMachine) => {
-    const candyMachineID = new PublicKey(candyMachine);
+    const candyMachineCreatorID = new PublicKey(candyMachine);
     return await web3.PublicKey.findProgramAddress(
-        [Buffer.from('candy_machine'), candyMachineID.toBuffer()],
+        [Buffer.from('candy_machine'), candyMachineCreatorID.toBuffer()],
         candyMachineProgram,
     );
   };
@@ -349,6 +351,7 @@ const CandyMachine = ({ walletAddress }) => {
           [signers, []],
         )
       ).txs.map(t => t.txid);
+      await getMintedItemsInfo();
       setIsMinting(false);
       return returnValue;
     } catch (e) {
@@ -357,6 +360,42 @@ const CandyMachine = ({ walletAddress }) => {
     }
     return [];
   };
+
+  const getMintedItemsInfo = async () => {
+    setIsLoadingMints(true);
+    await setTimeout(console.log('after 1 minute at least'), 60000);
+    setMints([]);
+    const candyMachineCreator = await getCandyMachineCreator(candyMachineID);
+    let data = await getMintAddresses(candyMachineCreator[0]);
+    console.log(data);
+    setMintCount(data.length);
+    if (data.length !== 0) {
+      for (const mint of data) {
+        // Get URI
+        let image
+        if (STORAGE_TYPE === 'arweave') {
+          let uri = mint.data.uri;
+          const response = await fetch(uri);
+          const parse = await response.json();
+          image = parse.image;
+        } else {
+          let ipfsUri = mint.data.uri;
+          let parsedUri = ipfsUri.slice(ipfsUri.indexOf('ipfs/')+5, ipfsUri.length);
+          let uri = "https://ipfs.io/ipfs/" + parsedUri;
+          const dataResponse = await fetch(uri);
+          const jsonResponse = await dataResponse.json();
+          let parsedJsonUri = jsonResponse.image.slice(jsonResponse.image.indexOf('ipfs/')+5, jsonResponse.image.length);
+          image = "https://ipfs.io/ipfs/" + parsedJsonUri;
+        }
+        
+        // Get image URI
+        if (!mints.find((mint) => mint === image)) {
+          setMints((prevState) => [...prevState, image]);
+        }
+      }
+    }
+    setTimeout(setIsLoadingMints(false), 5000);
+  }
 
   useEffect(() => {
     getCandyMachineState();
@@ -389,7 +428,7 @@ const CandyMachine = ({ walletAddress }) => {
 
     // Fetch the metadata from your candy machine
     const candyMachine = await program.account.candyMachine.fetch(
-      process.env.REACT_APP_CANDY_MACHINE_ID
+      candyMachineID
     );
 
     // Parse out all our metadata and log it out
@@ -409,10 +448,9 @@ const CandyMachine = ({ walletAddress }) => {
     ).toLocaleDateString()} @ ${new Date(
       goLiveData * 1000
     ).toLocaleTimeString()}`;
-
-
+    setMintCount(itemsRedeemed);
     await setCandyMachine({
-      id: process.env.REACT_APP_CANDY_MACHINE_ID,
+      id: candyMachineID,
       program,
       state: {
         itemsAvailable,
@@ -441,40 +479,23 @@ const CandyMachine = ({ walletAddress }) => {
       },
     });
 
-    setIsLoadingMints(true);
-    const candyMachineAddress = process.env.REACT_APP_CANDY_MACHINE_ID;
-    const candyMachineCreator = await getCandyMachineCreator(candyMachineAddress);
 
-    let data = await getMintAddresses(candyMachineCreator[0]);
-    console.log(data);
-    if (data.length !== 0) {
-      for (const mint of data) {
-        // Get URI
-        let image
-        if (STORAGE_TYPE === 'arweave') {
-          let uri = mint.data.uri;
-          const response = await fetch(uri);
-          const parse = await response.json();
-          image = parse.image;
-        } else {
-          let ipfsUri = mint.data.uri;
-          let parsedUri = ipfsUri.slice(ipfsUri.indexOf('ipfs/')+5, ipfsUri.length);
-          let uri = "https://ipfs.io/ipfs/" + parsedUri;
-          const dataResponse = await fetch(uri);
-          const jsonResponse = await dataResponse.json();
-          let parsedJsonUri = jsonResponse.image.slice(jsonResponse.image.indexOf('ipfs/')+5, jsonResponse.image.length);
-          image = "https://ipfs.io/ipfs/" + parsedJsonUri;
-        }
-        
-        // Get image URI
-        if (!mints.find((mint) => mint === image)) {
-          setMints((prevState) => [...prevState, image]);
-        }
-      }
-    }
+    getMintedItemsInfo();
     // Remove loading flag.
-    setIsLoadingMints(false);
   };
+
+  const renderMintedItems = () => (
+    <div className="gif-container">
+      <p className="sub-text">Minted Items ✨</p>
+      <div className="gif-grid">
+        {mints.map((mint) => (
+          <div className="gif-item" key={mint}>
+            <img src={mint} alt={`Minted NFT ${mint}`} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 
   // Create render function
   const renderDropTimer = () => {
@@ -493,25 +514,11 @@ const CandyMachine = ({ walletAddress }) => {
     return <p>{`Drop Date: ${candyMachine.state.goLiveDateTimeString}`}</p>;
   };
 
-  const renderMintedItems = () => (
-    <div className="gif-container">
-      <p className="sub-text">Minted Items ✨</p>
-      <div className="gif-grid">
-        {mints.map((mint) => (
-          <div className="gif-item" key={mint}>
-            <img src={mint} alt={`Minted NFT ${mint}`} />
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-
-
   return (
     candyMachine && candyMachine.state && (
       <div className="machine-container">
         {renderDropTimer()}
-        <p>{`Items Minted: ${candyMachine.state.itemsRedeemed} / ${candyMachine.state.itemsAvailable}`}</p>
+        <p>{`Items Minted: ${mintCount} / ${candyMachine.state.itemsAvailable}`}</p>
         {candyMachine.state.itemsRedeemed === candyMachine.state.itemsAvailable ? (
           <p className="sub-text">Sold Out 🙊</p>
         ) : (
@@ -524,8 +531,8 @@ const CandyMachine = ({ walletAddress }) => {
           </button>
         )}
 
-        {mints.length > 0 && renderMintedItems()}
-        {isLoadingMints && <p>LOADING MINTS...</p>}
+        {(mintCount > 0 && mints.length > 0) && renderMintedItems()}
+        {(mintCount > 0 && isLoadingMints) && <p>LOADING MINTS...</p>}
       </div>
     )
   );
